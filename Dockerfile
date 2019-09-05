@@ -4,9 +4,7 @@ MAINTAINER Andrey Mamaev <asda@asda.ru>
 
 ENV MYSQLTMPROOT toor
 
-RUN echo mysql-server mysql-server/root_password password $MYSQLTMPROOT | debconf-set-selections;\
-  echo mysql-server mysql-server/root_password_again password $MYSQLTMPROOT | debconf-set-selections;\
-  apt-get update && apt-get install -y mysql-server mysql-client libmysqlclient-dev \
+RUN apt-get update && apt-get install -y mysql-client libmysqlclient-dev \
   nginx php php-common php-gd php-curl php-mail php-mail-mime php-pear php-db php-mysqlnd \
   freeradius freeradius-mysql freeradius-utils \
   wget unzip && \
@@ -30,9 +28,9 @@ RUN wget https://github.com/lirantal/daloradius/archive/master.zip && \
 
 COPY init.sh /	
 COPY etc/nginx/radius.conf /etc/nginx/sites-enabled/
-		
 
-	
+
+
 EXPOSE 1812 1813 80
 
 ENTRYPOINT ["/init.sh"]

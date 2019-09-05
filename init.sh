@@ -1,17 +1,13 @@
 #!/bin/bash
-service mysql start
 
-mysql -u root --password=$MYSQLTMPROOT -e \
-"CREATE DATABASE radius; GRANT ALL ON radius.* TO radius@localhost IDENTIFIED BY '$RADIUS_DB_PWD'; \
-flush privileges;"
-
-mysql -uradius --password=$RADIUS_DB_PWD radius  < /etc/freeradius/sql/mysql/schema.sql
-mysql -uradius --password=$RADIUS_DB_PWD radius  < /etc/freeradius/sql/mysql/nas.sql
-mysql -uradius --password=$RADIUS_DB_PWD radius  < /var/www/daloradius/contrib/db/mysql-daloradius.sql
+mysql --user=$RADIUS_DB_USER --password=$RADIUS_DB_PWD $RADIUS_DB_NAME  < /etc/freeradius/3.0/main/mysql/schema.sql
+mysql --user=$RADIUS_DB_USER --password=$RADIUS_DB_PWD $RADIUS_DB_NAME  < /etc/freeradius/3.0/main/mysql/nas.sql
+mysql --user=$RADIUS_DB_USER --password=$RADIUS_DB_PWD $RADIUS_DB_NAME  < /var/www/daloradius/contrib/db/mysql-daloradius.sql
 
 
 sed -i 's/password = "radpass"/password = "'$RADIUS_DB_PWD'"/' /etc/freeradius/sql.conf
 sed -i 's/#port = 3306/port = 3306/' /etc/freeradius/sql.conf
+sed -i 's/#server = localhost/server = radius/' /etc/freeradius/3.0/sql.conf
 sed -i -e 's/$INCLUDE sql.conf/\n$INCLUDE sql.conf/g' /etc/freeradius/radiusd.conf
 sed -i -e 's|$INCLUDE sql/mysql/counter.conf|\n$INCLUDE sql/mysql/counter.conf|g' /etc/freeradius/radiusd.conf
 sed -i -e 's|authorize {|authorize {\nsql|' /etc/freeradius/sites-available/inner-tunnel
@@ -38,31 +34,40 @@ echo -e "\nATTRIBUTE Usage-Limit 3000 string\nATTRIBUTE Rate-Limit 3001 string" 
 
 #================DALORADIUS=========================
 sed -i "s/$configValues\['CONFIG_DB_PASS'\] = '';/$configValues\['CONFIG_DB_PASS'\] = '"$RADIUS_DB_PWD"';/" /var/www/daloradius/library/daloradius.conf.php
-sed -i "s/$configValues\['CONFIG_DB_USER'\] = 'root';/$configValues\['CONFIG_DB_USER'\] = 'radius';/" /var/www/daloradius/library/daloradius.conf.php
+sed -i "s/$configValues\['CONFIG_DB_USER'\] = 'root';/$configValues\['CONFIG_DB_USER'\] = '"$RADIUS_DB_USER"';/" /var/www/daloradius/library/daloradius.conf.php
 
 if [ -n "$CLIENT_NET" ]; then
-echo "client $CLIENT_NET { 
-    	secret          = $CLIENT_SECRET 
-    	shortname       = clients 
+echo "client $CLIENT_NET {
+    	secret          = $CLIENT_SECRET
+    	shortname       = clients
 }" >> /etc/freeradius/clients.conf
 fi 
 
 
 #======== DELETE INIT CODE ==
 echo "#!/bin/bash
-(while :
-do
-  mysqld_safe >/dev/null
-done) & 
-php-fpm7.0 & 
+
+echo Waiting for MySQL daemon to brought up...
+until mysql --host=radius --user=$RADIUS_DB_USER --password=$RADIUS_DB_PWD &> /dev/null; do
+    sleep 1
+done
+echo MySQL is up. Continuing...
+
+php7.2-fpm & 
 nginx & 
 /usr/sbin/freeradius -X" > /init.sh
 
 
 mkdir /run/php & \
-mysqld_safe >/dev/null & \
-php-fpm7.0 & \
+
+echo Waiting for MySQL daemon to brought up...
+until mysql --host=radius --user=$RADIUS_DB_USER --password=$RADIUS_DB_PWD &> /dev/null; do
+    sleep 1
+done
+echo MySQL is up. Continuing...
+
+php7.2-fpm & \
 nginx & \
 /usr/sbin/freeradius -X
 
-echo "Inited and STERTED"
+echo "Inited and STARTED"
